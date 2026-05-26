@@ -90,25 +90,20 @@ def main():
         print(f"Fetch error: {e}")
         return
 
-    # Debug: show first 1000 chars of HTML
-    print("=== HTML PREVIEW ===")
-    print(html[:1000])
-    print("=== END PREVIEW ===")
+    # Check if we're actually on the right page (not redirected to login)
+    if "juhiloaTaotlus" not in html and "eksamiBroneerimine" not in html:
+        print("Login page detected — session expired")
+        send_telegram(TELEGRAM_TOKEN, TELEGRAM_CHAT_ID,
+            "⚠️ <b>Exam monitor</b>: сессия истекла, нужно обновить cookie")
+        return
 
-    # Check if redirected to login
-    login_signals = ["Sisselogimine", "smart-id", "id-kaart", "login", "Logi sisse"]
-    for signal in login_signals:
-        if signal.lower() in html.lower():
-            print(f"Login page detected (signal: '{signal}') — session expired")
-            send_telegram(TELEGRAM_TOKEN, TELEGRAM_CHAT_ID,
-                "⚠️ <b>Exam monitor</b>: сессия истекла, нужно обновить cookie")
-            return
+    print("Session OK — page loaded successfully")
 
     all_slots = parse_slots(html)
     print(f"Found {len(all_slots)} total slots")
 
     if not all_slots:
-        print("No slots parsed — check HTML preview above")
+        print("No slots parsed — slots may not be visible on this page yet")
         return
 
     early_slots = filter_slots_before(all_slots, TARGET_DATE)
