@@ -26,7 +26,7 @@ def fetch_page(session_cookie: str) -> str:
         URL,
         headers={
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Cookie": f"JSESSIONID={session_cookie}",
+            "Cookie": session_cookie,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "et-EE,et;q=0.9,en;q=0.8",
             "Referer": URL,
