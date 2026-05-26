@@ -1,0 +1,21 @@
+name: Exam Slot Monitor
+
+on:
+  schedule:
+    # Every 10 minutes
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # allow manual run
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run monitor
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SESSION_COOKIE: ${{ secrets.SESSION_COOKIE }}
+          TARGET_DATE: ${{ secrets.TARGET_DATE }}
+        run: python monitor.py
