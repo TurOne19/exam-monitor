@@ -1,4 +1,3 @@
-cat > /mnt/user-data/outputs/monitor.py << 'EOF'
 #!/usr/bin/env python3
 """DEBUG VERSION — finds the correct form/button for slot loading"""
 
