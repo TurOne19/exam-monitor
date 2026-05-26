@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-"""DEBUG — dump juht.jsf buttons to find juhiloaTaotlus navigation"""
+"""DEBUG — dump all buttons on juhiloaTaotlus.jsf"""
 
 import os, re, gzip, json, urllib.request, urllib.parse
 from datetime import datetime
 
 SESSION_COOKIE = os.environ.get("SESSION_COOKIE", "")
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 BASE_URL = "https://eteenindus.mnt.ee"
 MAIN_URL = f"{BASE_URL}/main.jsf"
 JUHT_URL = f"{BASE_URL}/juht.jsf?lang=et"
@@ -44,54 +42,69 @@ def get_viewstate(html):
     return m.group(1) if m else ""
 
 def main():
-    # Navigate to juht.jsf
+    # Step 1: main.jsf
     html, _ = fetch(MAIN_URL)
     vs = get_viewstate(html)
-    juht_html, juht_url = fetch(MAIN_URL, data={
-        "j_idt87": "j_idt87",
-        "j_idt87:j_idt90": "j_idt87:j_idt90",
+
+    # Step 2: juht.jsf
+    juht_html, _ = fetch(MAIN_URL, data={
+        "j_idt87": "j_idt87", "j_idt87:j_idt90": "j_idt87:j_idt90",
         "javax.faces.ViewState": vs,
     }, referer=MAIN_URL)
     vs2 = get_viewstate(juht_html) or vs
-    print(f"juht.jsf: {juht_url} ({len(juht_html)} chars)")
 
-    # ALL onclick buttons with surrounding text
-    print("\n=== ALL BUTTONS WITH CONTEXT ===")
-    for m in re.finditer(r's:&quot;([^&]+)&quot;([^)]*)\)', juht_html):
+    # Step 3: juhiloaTaotlus.jsf
+    taotlus_html, taotlus_url = fetch(JUHT_URL, data={
+        "j_idt127": "j_idt127", "j_idt127:j_idt217": "j_idt127:j_idt217",
+        "javax.faces.ViewState": vs2,
+    }, referer=JUHT_URL)
+    vs3 = get_viewstate(taotlus_html) or vs2
+    print(f"juhiloaTaotlus: {taotlus_url} ({len(taotlus_html)} chars)")
+
+    # Dump ALL buttons with context
+    print("\n=== ALL BUTTONS ON juhiloaTaotlus.jsf ===")
+    for m in re.finditer(r's:&quot;([^&]+)&quot;([^)]*)\)', taotlus_html):
         btn_id = m.group(1)
         pos = m.start()
-        # Get text around this button
-        chunk = juht_html[max(0,pos-200):pos+400]
-        # Extract readable text
+        chunk = taotlus_html[max(0,pos-300):pos+400]
         text = re.sub(r'<[^>]+>', ' ', chunk)
-        text = re.sub(r'\s+', ' ', text).strip()[:120]
+        text = re.sub(r'\s+', ' ', text).strip()[:150]
         print(f"  [{btn_id}] → {text}")
 
-    # Look for eksam/juhiluba/taotlus keywords
-    print("\n=== CONTEXT AROUND EXAM KEYWORDS ===")
-    for kw in ["eksam", "juhiluba", "taotlus", "registreeri", "juhiloaTaotlus", "sõidueksam"]:
-        for m in re.finditer(kw, juht_html, re.IGNORECASE):
-            start = max(0, m.start()-200)
-            end = min(len(juht_html), m.end()+200)
-            snippet = re.sub(r'<[^>]+>', ' ', juht_html[start:end])
-            snippet = re.sub(r'\s+', ' ', snippet).strip()
+    # Keywords
+    print("\n=== KEYWORDS ===")
+    for kw in ["vabad", "kiiremini", "varaseimad", "eksamiBroneerimine", "Sõidueksam", "broneeri"]:
+        idx = taotlus_html.lower().find(kw.lower())
+        if idx >= 0:
+            chunk = taotlus_html[max(0,idx-400):idx+400]
+            text = re.sub(r'\s+', ' ', chunk).strip()
             print(f"\n-- '{kw}' --")
-            print(snippet[:300])
+            print(text[:500])
 
-    # Try each j_idt127:* button to see where it goes
-    print("\n=== TRYING ALL j_idt127 BUTTONS ===")
-    btns = re.findall(r's:&quot;(j_idt127:[^&]+)&quot;', juht_html)
-    print(f"Found: {btns}")
-    for btn in btns[:8]:
+    # All forms
+    print("\n=== FORMS ===")
+    for m in re.finditer(r'<form[^>]*id="([^"]+)"', taotlus_html):
+        print(f"  {m.group(1)}")
+
+    # Try to trigger AJAX for all "form:*" buttons
+    print("\n=== TRYING AJAX ON form:* BUTTONS ===")
+    form_btns = re.findall(r's:&quot;(form:[^&]+)&quot;', taotlus_html)
+    print(f"form:* buttons: {form_btns}")
+    taotlus_base = taotlus_url.split("?")[0]
+    for btn in form_btns[:10]:
         try:
-            resp, rurl = fetch(JUHT_URL, data={
-                "j_idt127": "j_idt127",
+            resp, _ = fetch(taotlus_base, data={
+                "javax.faces.partial.ajax": "true",
+                "javax.faces.source": btn,
+                "javax.faces.partial.execute": btn,
+                "javax.faces.partial.render": "@all",
                 btn: btn,
-                "javax.faces.ViewState": vs2,
-            }, referer=JUHT_URL)
-            print(f"  {btn} → {rurl} ({len(resp)} chars)")
-            if "juhiloaTaotlus" in rurl or "eksam" in rurl.lower():
-                print(f"  *** FOUND IT! ***")
+                "form": "form",
+                "javax.faces.ViewState": vs3,
+            }, ajax=True, referer=taotlus_url)
+            preview = re.sub(r'<[^>]+>', ' ', resp[:500])
+            preview = re.sub(r'\s+', ' ', preview).strip()[:200]
+            print(f"  {btn} → ({len(resp)} chars) {preview}")
         except Exception as e:
             print(f"  {btn} → ERROR: {e}")
 
